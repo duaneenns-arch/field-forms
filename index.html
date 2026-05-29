@@ -422,153 +422,214 @@ function generatePDF(){
   const d=collect();
   const { jsPDF }=window.jspdf;
   const doc=new jsPDF({unit:'pt',format:'letter'}); // 612 x 792
-  const PW=612, M=40, RW=PW-M*2;
+  const PW=612, PH=792, M=40, RW=PW-M*2;
+  const black=[0,0,0], dot=[120,120,120];
   let y=M;
 
-  const navy=[10,35,66], steel=[29,78,137], line=[170,182,196], ink=[19,32,46];
-  function hr(yy,col){col=col||line;doc.setDrawColor(...col);doc.setLineWidth(1);doc.line(M,yy,PW-M,yy);}
+  function txt(s,x,yy,opt){doc.text(s||'',x,yy,opt);}
+  function solidLine(x1,yy,x2,w){doc.setDrawColor(...black);doc.setLineWidth(w||0.7);doc.setLineDashPattern([],0);doc.line(x1,yy,x2,yy);}
+  function dottedLine(x1,yy,x2){doc.setDrawColor(...dot);doc.setLineWidth(0.7);doc.setLineDashPattern([1,1.4],0);doc.line(x1,yy,x2,yy);doc.setLineDashPattern([],0);}
 
-  /* header band */
-  doc.setFillColor(...navy);doc.rect(0,0,PW,52,'F');
-  doc.setTextColor(255,255,255);
-  doc.setFont('helvetica','bold');doc.setFontSize(20);
-  doc.text('SHMZ',M,26);
-  doc.setFontSize(8);doc.setFont('helvetica','normal');
-  doc.text('SHIMIZU NORTH AMERICA LLC',M,40);
-  doc.setFontSize(8);
-  doc.text('2100 Riveredge Parkway, Suite 1100, Atlanta, GA 30328',PW-M,30,{align:'right'});
-  doc.text('FORM NO.: ATC-11   REV.0',PW-M,42,{align:'right'});
-  y=70;
+  /* ===== HEADER (logo area + PROJECT NAME + thick rule + address) ===== */
+  doc.setTextColor(...black);
+  // logo block: small ellipse mark + SHMZ wordmark
+  doc.setFont('helvetica','bold');doc.setFontSize(7);
+  txt('SHIMIZU NORTH AMERICA LLC',M,y+2);
+  doc.setFontSize(26);
+  txt('SHMZ',M,y+24);
+  // small circle accent at top-right of the wordmark line
+  doc.setDrawColor(...black);doc.setLineWidth(1.2);doc.ellipse(M+118,y-2,6,4,'S');
+  // PROJECT NAME label to the right of logo
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  txt('PROJECT NAME : '+(d.projectName||''),M+150,y+10);
+  y+=30;
+  // thick black rule
+  solidLine(M,y,PW-M,2.4);
+  y+=12;
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+  txt('2100 Riveredge Parkway, Suite 1100, Atlanta, GA 30328',M,y);
+  y+=10;
 
-  doc.setTextColor(...ink);
-  doc.setFont('helvetica','bold');doc.setFontSize(14);
-  doc.text('PIPE PRESSURE AND LEAKAGE FUNCTION TEST',PW/2,y,{align:'center'});
-  y+=8;hr(y,navy);y+=18;
+  /* ===== OUTER BORDER BOX ===== */
+  const boxTop=y;
+  // we draw the rectangle at the end once we know bottom; use fixed bottom near footer
+  const boxBottom=PH-64;
+  doc.setDrawColor(...black);doc.setLineWidth(1);doc.setLineDashPattern([],0);
+  doc.rect(M,boxTop,RW,boxBottom-boxTop);
+  const IN=M+14;            // inner left padding
+  const INR=PW-M-14;        // inner right padding
+  const IW=INR-IN;          // inner width
+  y=boxTop+24;
 
-  /* label : value rows */
-  function labelVal(label,val,yy,half,xoff){
-    doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...steel);
-    doc.text(label.toUpperCase(),(xoff||M),yy);
-    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...ink);
-    const lx=(xoff||M)+ (half? 110:120);
-    doc.text(val||'',lx,yy);
-    const lineW=(half? (RW/2-20):RW)-((half?110:120));
-    doc.setDrawColor(...line);doc.setLineWidth(.7);doc.line(lx,yy+3,lx+lineW,yy+3);
+  /* ===== TITLE ===== */
+  doc.setFont('helvetica','bold');doc.setFontSize(13);
+  txt('PIPE PRESSURE AND LEAKAGE FUNCTION TEST',PW/2,y,{align:'center'});
+  y+=22;
+
+  /* ===== IDENTIFICATION ROWS ===== */
+  const valX=IN+120;
+  function identRow(label,val){
+    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...black);
+    txt(label,IN,y);
+    txt(val||'',valX,y);
+    solidLine(valX,y+2,INR,0.7);
+    y+=18;
   }
-  const ident=[['Subcontractor',d.subcontractor],['System (Service)',d.system],['Location',d.location],['Drawing Ref',d.drawingRef],['Pipe Material',d.pipeMaterial]];
-  // project name row at very top of body
-  labelVal('Project Name',d.projectName,y);y+=22;
-  ident.forEach(p=>{labelVal(p[0],p[1],y);y+=22;});
-  y+=2;hr(y);y+=18;
+  identRow('SUBCONTRACTOR:',d.subcontractor);
+  identRow('SYSTEM (SERVICE) :',d.system);
+  identRow('LOCATION :',d.location);
+  identRow('DRAWING REF :',d.drawingRef);
+  identRow('PIPE MATERIAL:',d.pipeMaterial);
+  y+=4;
+  solidLine(IN,y,INR,0.7);y+=18;
 
-  /* specification */
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text('SPECIFICATION',M,y);y+=16;
-  labelVal('Working Pressure',(d.workingPressure?d.workingPressure+' psi':''),y,true);
-  labelVal('Test Pressure',(d.testPressure?d.testPressure+' psi':''),y,true,M+RW/2);y+=22;
-  labelVal('Duration / Test Time',(d.duration?d.duration+' hours':''),y,true);y+=24;
-  hr(y);y+=18;
+  /* ===== SPECIFICATION / TEST CONDITION ===== */
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+  txt('SPECIFICATION',IN,y);
+  doc.setFont('helvetica','bold');doc.setFontSize(9.5);
+  txt('WORKING PRESSURE',IN+150,y);
+  y+=20;
+  // working pressure value + psi line (centered under WORKING PRESSURE col)
+  const wpLineX1=IN+150, wpLineX2=IN+150+150;
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+  txt((d.workingPressure||''),wpLineX1+4,y-2);
+  solidLine(wpLineX1,y,wpLineX2,0.7);
+  doc.setFont('helvetica','bold');txt('psi',wpLineX2-22,y-2);
+  y+=22;
+  // TEST CONDITION row
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+  txt('TEST CONDITION',IN,y);
+  doc.setFont('helvetica','bold');
+  txt('TEST PRESSURE',IN+150,y);
+  txt('DURATION TEST TIME',IN+330,y);
+  y+=20;
+  // test pressure psi line
+  doc.setFont('helvetica','normal');
+  txt((d.testPressure||''),IN+150+4,y-2);
+  solidLine(IN+150,y,IN+150+130,0.7);
+  doc.setFont('helvetica','bold');txt('psi',IN+150+130-22,y-2);
+  // duration hours line
+  doc.setFont('helvetica','normal');
+  txt((d.duration||''),IN+330+4,y-2);
+  solidLine(IN+330,y,INR,0.7);
+  doc.setFont('helvetica','bold');txt('hours',INR-30,y-2);
+  y+=18;
+  solidLine(IN,y,INR,0.7);y+=18;
 
-  /* readings two columns */
-  const colL=M, colR=M+RW/2;
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text('START',colL,y);doc.text('COMPLETE',colR,y);y+=16;
-  function rdg(label,lval,rval,yy){
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...steel);
-    doc.text(label.toUpperCase(),colL,yy);doc.text(label.toUpperCase(),colR,yy);
-    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
-    doc.text(lval||'',colL+78,yy);doc.text(rval||'',colR+78,yy);
-    doc.setDrawColor(...line);doc.setLineWidth(.7);
-    doc.line(colL+78,yy+3,colL+RW/2-20,yy+3);
-    doc.line(colR+78,yy+3,colR+RW/2-20,yy+3);
+  /* ===== START / COMPLETE READINGS ===== */
+  const colL=IN, colR=IN+IW/2+10;
+  const labW=58;
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...black);
+  txt('START',colL,y);txt('COMPLETE',colR,y);y+=15;
+  function readingRow(label,lval,rval){
+    doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+    txt(label,colL,y);txt(label,colR,y);
+    txt(lval||'',colL+labW,y);txt(rval||'',colR+labW,y);
+    dottedLine(colL+labW,y+2,colL+IW/2-10);dottedLine(colR+labW,y+2,INR);
+    y+=15;
   }
-  rdg('Date',d.startDate,d.endDate,y);y+=20;
-  rdg('Time',d.startTime,d.endTime,y);y+=20;
-  rdg('Pressure',(d.startReading?d.startReading+' psi':''),(d.endReading?d.endReading+' psi':''),y);y+=20;
-  // pressure drop (single, under complete column)
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...steel);
-  doc.text('PRESSURE DROP',colR,y);
-  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
-  doc.text(d.pressureDrop||'',colR+85,y);
-  doc.setDrawColor(...line);doc.line(colR+85,y+3,colR+RW/2-20,y+3);
-  y+=22;hr(y);y+=16;
+  readingRow('Date',d.startDate,d.endDate);
+  readingRow('Time',d.startTime,d.endTime);
+  // Pressure Reading (two-line label) on the data line, both columns
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+  txt('Pressure',colL,y);txt('Pressure',colR,y);
+  txt((d.startReading||''),colL+labW,y);txt((d.endReading||''),colR+labW,y);
+  dottedLine(colL+labW,y+2,colL+IW/2-10);dottedLine(colR+labW,y+2,INR);
+  txt('Reading',colL,y+11);txt('Reading',colR,y+11);
+  y+=26;
+  // Pressure Drop (single, under COMPLETE column only)
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+  txt('Pressure',colR,y);
+  txt(d.pressureDrop||'',colR+labW,y);
+  dottedLine(colR+labW,y+2,INR);
+  txt('Drop',colR,y+11);
+  y+=22;
 
-  /* photos */
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...steel);
-  doc.text('PHOTO (START)',colL,y);doc.text('PHOTO (COMPLETE)',colR,y);y+=8;
-  const boxW=RW/2-15, boxH=110;
+  /* ===== PHOTOS ===== */
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);
+  txt('Photo',colL,y);txt('Photo',colR,y);y+=6;
+  const boxW=IW/2-20, boxH=84;
   function photoBox(img,x,yy){
-    doc.setDrawColor(...line);doc.setLineWidth(1);doc.rect(x,yy,boxW,boxH);
+    doc.setDrawColor(...black);doc.setLineWidth(1);doc.setLineDashPattern([],0);
+    doc.rect(x,yy,boxW,boxH);
     if(img){
       try{
-        const props=doc.getImageProperties(img);
-        const r=Math.min(boxW/props.width,boxH/props.height);
-        const w=props.width*r,h=props.height*r;
+        const p=doc.getImageProperties(img);
+        const r=Math.min(boxW/p.width,boxH/p.height);
+        const w=p.width*r,h=p.height*r;
         doc.addImage(img,'JPEG',x+(boxW-w)/2,yy+(boxH-h)/2,w,h);
       }catch(e){}
     }
   }
   photoBox(state.startPhoto,colL,y);
   photoBox(state.endPhoto,colR,y);
-  y+=boxH+14;hr(y);y+=16;
+  y+=boxH+12;
+  solidLine(IN,y,INR,0.7);y+=16;
 
-  /* inspection result */
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text('INSPECTION RESULT',M,y);y+=16;
-  function chk(label,checked,x,yy){
-    doc.setDrawColor(...ink);doc.setLineWidth(1);doc.rect(x,yy-9,11,11);
-    if(checked){doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...steel);doc.text('X',x+1.7,yy);}
-    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
-    doc.text(label,x+17,yy);
+  /* ===== INSPECTION RESULT ===== */
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...black);
+  txt('INSPECTION RESULT',IN,y);y+=18;
+  function box(x,yy,checked){
+    doc.setDrawColor(...black);doc.setLineWidth(1);doc.setLineDashPattern([],0);
+    doc.rect(x,yy-9,22,12);
+    if(checked){doc.setFont('helvetica','bold');doc.setFontSize(11);txt('X',x+7,yy);doc.setFont('helvetica','normal');doc.setFontSize(9.5);}
   }
-  chk('Approved',d.result==='Approved',M,y);
-  chk('Approved with Comment',d.result==='Approved with Comment',M+150,y);
-  chk('Not Approved',d.result==='Not Approved',M+340,y);
+  box(IN+8,y,d.result==='Approved');txt('Approved',IN+38,y);
+  box(IN+190,y,d.result==='Approved with Comment');txt('Approved with Comment',IN+220,y);
+  box(IN+400,y,d.result==='Not Approved');txt('Not Approved',IN+430,y);
   y+=22;
-  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
-  doc.text('Re-inspection Required',M,y);
-  chk('Yes',d.reinspect==='Yes',M+160,y);chk('No',d.reinspect==='No',M+230,y);y+=22;
-  doc.text('Acceptable for Next Work',M,y);
-  chk('Yes',d.nextwork==='Yes',M+160,y);chk('No',d.nextwork==='No',M+230,y);y+=22;
+  txt('Re-inspection Required',IN,y);
+  box(IN+200,y,d.reinspect==='Yes');txt('Yes',IN+228,y);
+  box(IN+300,y,d.reinspect==='No');txt('No',IN+328,y);y+=22;
+  txt('Acceptable for Next Work',IN,y);
+  box(IN+200,y,d.nextwork==='Yes');txt('Yes',IN+228,y);
+  box(IN+300,y,d.nextwork==='No');txt('No',IN+328,y);y+=22;
 
-  doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...navy);
-  doc.text('REMARK / NON-CONFORMANCE',M,y);y+=6;
-  doc.setDrawColor(...line);doc.setLineWidth(.7);
-  const remLines=doc.splitTextToSize(d.remarks||'',RW-6);
-  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
-  doc.text(remLines,M+2,y+12);
-  const remH=Math.max(34,remLines.length*12+10);
-  doc.rect(M,y+2,RW,remH);
-  y+=remH+14;hr(y);y+=16;
+  doc.setFont('helvetica','bold');doc.setFontSize(9.5);
+  txt('REMARK / NON-CONFORMANCE',IN,y);y+=8;
+  doc.setFont('helvetica','normal');
+  const remLines=doc.splitTextToSize(d.remarks||'',IW-8);
+  txt(remLines,IN+2,y+12);
+  const remBottom=y+Math.max(24,remLines.length*12+8);
+  solidLine(IN,remBottom,INR,0.7);
+  y=remBottom+16;
 
-  /* signatures */
-  const sigColW=RW/3-8;
+  /* ===== SIGNATURES (3 columns w/ vertical dividers) ===== */
+  // Anchor signatures to a fixed band at the bottom of the box so they always fit
+  const sigBandTop=boxBottom-108;
+  y=Math.max(y, sigBandTop);
+  const sigColW=IW/3;
   const sigs=[
     ['SUB CONTRACTOR',d.subName,d.subCompany,d.subDate,padData('subSig')],
     ['MAIN CONTRACTOR',d.mainName,d.mainCompany,d.mainDate,padData('mainSig')],
     ["CLIENT/CLIENT'S REP",d.clientName,d.clientCompany,d.clientDate,padData('clientSig')]
   ];
+  const sigTop=y;
+  // vertical dividers between columns
+  doc.setDrawColor(...black);doc.setLineWidth(0.7);doc.setLineDashPattern([],0);
+  doc.line(IN+sigColW,sigTop-6,IN+sigColW,boxBottom-8);
+  doc.line(IN+sigColW*2,sigTop-6,IN+sigColW*2,boxBottom-8);
   sigs.forEach((s,i)=>{
-    const x=M+i*(sigColW+12);
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
-    doc.text(s[0],x,y);
-    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...steel);
-    doc.text('Witness',x,y+11);
-    if(s[4]){try{doc.addImage(s[4],'PNG',x,y+15,sigColW-4,32);}catch(e){}}
-    let yy=y+58;
-    doc.setDrawColor(...line);doc.setLineWidth(.6);doc.line(x,yy,x+sigColW,yy);
-    doc.setFontSize(8);doc.setTextColor(...ink);
-    doc.text('Name: '+(s[1]||''),x,yy+11);
-    doc.text('Company: '+(s[2]||''),x,yy+23);
-    doc.text('Date: '+(s[3]||''),x,yy+35);
+    const x=IN+i*sigColW+6;
+    const w=sigColW-12;
+    doc.setFont('helvetica','bold');doc.setFontSize(9);txt(s[0],x,y);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);txt('Witness',x,y+12);
+    if(s[4]){try{doc.addImage(s[4],'PNG',x,y+16,w,26);}catch(e){}}
+    let yy=y+46;
+    doc.setFontSize(8.5);
+    txt('Name:',x,yy);dottedLine(x+30,yy+2,x+w);
+    txt(s[1]||'',x+34,yy);yy+=15;
+    txt('Company:',x,yy);
+    txt(s[2]||'',x+44,yy);dottedLine(x+44,yy+2,x+w);yy+=15;
+    txt('Date:',x,yy);dottedLine(x+28,yy+2,x+w);
+    txt(s[3]||'',x+32,yy);
   });
-  y+=110;
 
-  /* footer */
-  doc.setFontSize(7);doc.setTextColor(...steel);
-  doc.text('REV.0',M,775);
-  doc.text('FORM NO.: ATC-11',PW/2,775,{align:'center'});
-  doc.text('ISSUED DATE: 10-01-07',PW-M,775,{align:'right'});
+  /* ===== FOOTER (below the box) ===== */
+  doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...black);
+  txt('REV.0',M,PH-22);
+  txt('FORM NO.: ATC-11',PW/2,PH-22,{align:'center'});
+  txt('ISSUED DATE: 10-01-07',PW-M,PH-22,{align:'right'});
 
   const fname=('PressureTest_'+(d.projectName||'Form')+'_'+(d.startDate||'')).replace(/[^a-z0-9_\-]/gi,'_')+'.pdf';
   doc.save(fname);
