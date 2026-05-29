@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>FieldForms — Pipe Pressure & Leakage Function Test</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0a2342;
+    --steel:#1d4e89;
+    --line:#c9d3df;
+    --bg:#eef2f6;
+    --card:#ffffff;
+    --ink:#13202e;
+    --muted:#5d6b7a;
+    --ok:#1f8a4c;
+    --warn:#c47f00;
+    --bad:#c0392b;
+    --accent:#ff6b1a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    font-size:16px;
+    line-height:1.45;
+    -webkit-text-size-adjust:100%;
+  }
+  header{
+    position:sticky;top:0;z-index:50;
+    background:var(--navy);
+    color:#fff;
+    padding:14px 16px;
+    display:flex;align-items:center;justify-content:space-between;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+  }
+  header .brand{display:flex;flex-direction:column;}
+  header .brand b{font-size:18px;letter-spacing:.5px;}
+  header .brand span{font-size:11px;color:#9fb6d4;text-transform:uppercase;letter-spacing:1.5px;}
+  header .tag{font-size:11px;background:var(--accent);color:#fff;padding:4px 9px;border-radius:20px;font-weight:700;}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 14px 120px;}
+  .section{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    margin-bottom:16px;
+    overflow:hidden;
+  }
+  .section > h2{
+    margin:0;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+    color:#fff;
+    background:var(--steel);
+    padding:11px 16px;
+  }
+  .body{padding:14px 16px;}
+  label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 5px;}
+  .field{margin-bottom:14px;}
+  input[type=text],input[type=number],input[type=date],input[type=time],textarea,select{
+    width:100%;
+    padding:13px 12px;
+    font-size:16px;
+    border:1.5px solid var(--line);
+    border-radius:9px;
+    background:#fff;
+    color:var(--ink);
+    font-family:inherit;
+  }
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--steel);box-shadow:0 0 0 3px rgba(29,78,137,.15);}
+  textarea{resize:vertical;min-height:72px;}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .subhead{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin:6px 0 12px;border-bottom:2px solid var(--line);padding-bottom:6px;}
+  .computed{background:#f3f7fb;border:1.5px dashed var(--steel);font-weight:700;color:var(--navy);}
+  .photo-box{
+    border:2px dashed var(--line);
+    border-radius:11px;
+    padding:14px;
+    text-align:center;
+    background:#fafcfe;
+    position:relative;
+  }
+  .photo-box img{max-width:100%;border-radius:8px;display:block;margin:0 auto 8px;max-height:220px;}
+  .photo-btn{
+    display:inline-block;background:var(--steel);color:#fff;font-weight:700;font-size:14px;
+    padding:11px 16px;border-radius:9px;border:none;cursor:pointer;
+  }
+  .photo-btn.sec{background:#fff;color:var(--steel);border:1.5px solid var(--steel);margin-left:8px;}
+  .photo-hint{font-size:12px;color:var(--muted);margin-top:8px;}
+  input[type=file]{display:none;}
+  .seg{display:flex;gap:8px;flex-wrap:wrap;}
+  .seg button{
+    flex:1;min-width:90px;
+    padding:13px 8px;font-size:14px;font-weight:700;
+    border:1.5px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);cursor:pointer;
+  }
+  .seg button.on{color:#fff;border-color:transparent;}
+  .seg button.on.ok{background:var(--ok);}
+  .seg button.on.warn{background:var(--warn);}
+  .seg button.on.bad{background:var(--bad);}
+  .seg button.on.neutral{background:var(--steel);}
+  .yn{display:flex;gap:8px;}
+  .yn button{flex:1;padding:12px;font-weight:700;border:1.5px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font-size:14px;}
+  .yn button.on{background:var(--steel);color:#fff;border-color:transparent;}
+  .sig-wrap{border:1.5px solid var(--line);border-radius:10px;background:#fff;overflow:hidden;}
+  canvas.sig{width:100%;height:150px;display:block;touch-action:none;background:#fff;}
+  .sig-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f3f7fb;border-top:1px solid var(--line);}
+  .sig-bar span{font-size:11px;color:var(--muted);}
+  .clear-link{font-size:12px;color:var(--bad);font-weight:700;cursor:pointer;}
+  .witness{border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:14px;}
+  .witness .wtitle{font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+  .footer-bar{
+    position:fixed;bottom:0;left:0;right:0;z-index:60;
+    background:#fff;border-top:1px solid var(--line);
+    padding:12px 14px;display:flex;gap:10px;max-width:760px;margin:0 auto;
+    box-shadow:0 -2px 12px rgba(0,0,0,.08);
+  }
+  .footer-bar .max{max-width:760px;margin:0 auto;width:100%;display:flex;gap:10px;}
+  .btn-main{
+    flex:2;background:var(--accent);color:#fff;font-weight:800;font-size:16px;
+    border:none;border-radius:11px;padding:15px;cursor:pointer;letter-spacing:.5px;
+  }
+  .btn-sec{
+    flex:1;background:#fff;color:var(--steel);font-weight:800;font-size:14px;
+    border:1.5px solid var(--steel);border-radius:11px;padding:15px 8px;cursor:pointer;
+  }
+  .btn-main:active,.btn-sec:active,.photo-btn:active{transform:scale(.98);}
+  .small{font-size:12px;color:var(--muted);}
+  @media(max-width:430px){
+    .row,.row3{grid-template-columns:1fr;}
+  }
+  .toast{
+    position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+    background:var(--navy);color:#fff;padding:12px 20px;border-radius:30px;
+    font-size:14px;font-weight:600;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none;
+    box-shadow:0 4px 16px rgba(0,0,0,.3);
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>FieldForms</b><span>SHIMIZU North America</span></div>
+  <div class="tag">ATC-11</div>
+</header>
+
+<div class="wrap">
+
+  <!-- GENERAL -->
+  <div class="section">
+    <h2>Project & Identification</h2>
+    <div class="body">
+      <div class="field"><label>Project Name</label><input type="text" id="projectName" placeholder="e.g. Riveredge Tower"></div>
+      <div class="field"><label>Subcontractor</label><input type="text" id="subcontractor"></div>
+      <div class="field"><label>System / Service</label><input type="text" id="system" placeholder="e.g. Chilled Water Supply"></div>
+      <div class="field"><label>Location</label><input type="text" id="location" placeholder="e.g. Level 4 Mech Room"></div>
+      <div class="field"><label>Drawing Reference</label><input type="text" id="drawingRef"></div>
+      <div class="field"><label>Pipe Material</label><input type="text" id="pipeMaterial" placeholder="e.g. Schedule 40 CS"></div>
+    </div>
+  </div>
+
+  <!-- SPEC -->
+  <div class="section">
+    <h2>Specification & Test Condition</h2>
+    <div class="body">
+      <div class="row3">
+        <div class="field"><label>Working Pressure (psi)</label><input type="number" inputmode="decimal" id="workingPressure"></div>
+        <div class="field"><label>Test Pressure (psi)</label><input type="number" inputmode="decimal" id="testPressure"></div>
+      </div>
+      <div class="field"><label>Duration / Test Time (hours)</label><input type="number" inputmode="decimal" id="duration"></div>
+    </div>
+  </div>
+
+  <!-- READINGS -->
+  <div class="section">
+    <h2>Test Readings</h2>
+    <div class="body">
+      <div class="subhead">Start</div>
+      <div class="row"><div class="field"><label>Date</label><input type="date" id="startDate"></div><div class="field"><label>Time</label><input type="time" id="startTime"></div></div>
+      <div class="field"><label>Start Pressure Reading (psi)</label><input type="number" inputmode="decimal" id="startReading" oninput="calcDrop()"></div>
+
+      <div class="subhead">Complete</div>
+      <div class="row"><div class="field"><label>Date</label><input type="date" id="endDate"></div><div class="field"><label>Time</label><input type="time" id="endTime"></div></div>
+      <div class="field"><label>End Pressure Reading (psi)</label><input type="number" inputmode="decimal" id="endReading" oninput="calcDrop()"></div>
+
+      <div class="field"><label>Pressure Drop (psi)</label><input type="text" id="pressureDrop" class="computed" readonly placeholder="auto-calculated"></div>
+    </div>
+  </div>
+
+  <!-- PHOTOS -->
+  <div class="section">
+    <h2>Photo Evidence</h2>
+    <div class="body">
+      <div class="field">
+        <label>Start Photo</label>
+        <div class="photo-box" id="startPhotoBox">
+          <div id="startPhotoPreview"></div>
+          <button class="photo-btn" onclick="document.getElementById('startPhotoInput').click()">📷 Capture / Choose</button>
+          <input type="file" id="startPhotoInput" accept="image/*" capture="environment" onchange="loadPhoto(this,'start')">
+          <div class="photo-hint">Gauge reading at start of test</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>End Photo</label>
+        <div class="photo-box" id="endPhotoBox">
+          <div id="endPhotoPreview"></div>
+          <button class="photo-btn" onclick="document.getElementById('endPhotoInput').click()">📷 Capture / Choose</button>
+          <input type="file" id="endPhotoInput" accept="image/*" capture="environment" onchange="loadPhoto(this,'end')">
+          <div class="photo-hint">Gauge reading at completion</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Additional Photos (optional)</label>
+        <div class="photo-box">
+          <div id="extraPhotoPreview" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
+          <button class="photo-btn sec" onclick="document.getElementById('extraPhotoInput').click()">+ Add Photo</button>
+          <input type="file" id="extraPhotoInput" accept="image/*" capture="environment" multiple onchange="loadExtra(this)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="section">
+    <h2>Inspection Result</h2>
+    <div class="body">
+      <div class="field">
+        <label>Result</label>
+        <div class="seg" id="resultSeg">
+          <button data-val="Approved" class="ok" onclick="pickSeg(this,'result')">Approved</button>
+          <button data-val="Approved with Comment" class="warn" onclick="pickSeg(this,'result')">Approved w/ Comment</button>
+          <button data-val="Not Approved" class="bad" onclick="pickSeg(this,'result')">Not Approved</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Re-Inspection Required</label>
+        <div class="yn" id="reinspectYN">
+          <button data-val="Yes" onclick="pickYN(this,'reinspect')">Yes</button>
+          <button data-val="No" onclick="pickYN(this,'reinspect')">No</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Acceptable for Next Work</label>
+        <div class="yn" id="nextworkYN">
+          <button data-val="Yes" onclick="pickYN(this,'nextwork')">Yes</button>
+          <button data-val="No" onclick="pickYN(this,'nextwork')">No</button>
+        </div>
+      </div>
+      <div class="field"><label>Remark / Non-Conformance</label><textarea id="remarks"></textarea></div>
+    </div>
+  </div>
+
+  <!-- SIGNATURES -->
+  <div class="section">
+    <h2>Signatures</h2>
+    <div class="body">
+      <div class="witness" data-w="sub">
+        <div class="wtitle">Subcontractor Witness</div>
+        <div class="field"><label>Name</label><input type="text" id="subName"></div>
+        <div class="field"><label>Company</label><input type="text" id="subCompany"></div>
+        <div class="field"><label>Date</label><input type="date" id="subDate"></div>
+        <label>Signature</label>
+        <div class="sig-wrap"><canvas class="sig" data-pad="subSig"></canvas><div class="sig-bar"><span>Sign above</span><span class="clear-link" data-clear="subSig">Clear</span></div></div>
+      </div>
+      <div class="witness" data-w="main">
+        <div class="wtitle">Main Contractor Witness</div>
+        <div class="field"><label>Name</label><input type="text" id="mainName"></div>
+        <div class="field"><label>Company</label><input type="text" id="mainCompany" value="SHIMIZU North America"></div>
+        <div class="field"><label>Date</label><input type="date" id="mainDate"></div>
+        <label>Signature</label>
+        <div class="sig-wrap"><canvas class="sig" data-pad="mainSig"></canvas><div class="sig-bar"><span>Sign above</span><span class="clear-link" data-clear="mainSig">Clear</span></div></div>
+      </div>
+      <div class="witness" data-w="client">
+        <div class="wtitle">Client / Client's Rep Witness</div>
+        <div class="field"><label>Name</label><input type="text" id="clientName"></div>
+        <div class="field"><label>Company</label><input type="text" id="clientCompany"></div>
+        <div class="field"><label>Date</label><input type="date" id="clientDate"></div>
+        <label>Signature</label>
+        <div class="sig-wrap"><canvas class="sig" data-pad="clientSig"></canvas><div class="sig-bar"><span>Sign above</span><span class="clear-link" data-clear="clientSig">Clear</span></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-bar">
+  <div class="max">
+    <button class="btn-sec" onclick="saveDraft()">Save Draft</button>
+    <button class="btn-main" onclick="generatePDF()">Generate PDF</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- state ---------- */
+const state = { result:"", reinspect:"", nextwork:"", startPhoto:null, endPhoto:null, extras:[] };
+
+/* ---------- toast ---------- */
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+/* ---------- pressure drop ---------- */
+function calcDrop(){
+  const s=parseFloat(document.getElementById('startReading').value);
+  const e=parseFloat(document.getElementById('endReading').value);
+  const out=document.getElementById('pressureDrop');
+  if(!isNaN(s)&&!isNaN(e)){out.value=(s-e).toFixed(2)+' psi';}
+  else{out.value='';}
+}
+
+/* ---------- segmented / yes-no ---------- */
+function pickSeg(btn,key){
+  const sib=btn.parentNode.querySelectorAll('button');
+  sib.forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  state[key]=btn.dataset.val;
+}
+function pickYN(btn,key){
+  const sib=btn.parentNode.querySelectorAll('button');
+  sib.forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  state[key]=btn.dataset.val;
+}
+
+/* ---------- photos (downscaled for PDF size) ---------- */
+function fileToScaled(file,maxDim,cb){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      let {width:w,height:h}=img;
+      const scale=Math.min(1,maxDim/Math.max(w,h));
+      w=Math.round(w*scale);h=Math.round(h*scale);
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      cb(c.toDataURL('image/jpeg',0.82));
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function loadPhoto(input,which){
+  if(!input.files[0])return;
+  fileToScaled(input.files[0],1400,data=>{
+    state[which+'Photo']=data;
+    document.getElementById(which+'PhotoPreview').innerHTML='<img src="'+data+'">';
+    toast((which==='start'?'Start':'End')+' photo added');
+  });
+}
+function loadExtra(input){
+  [...input.files].forEach(f=>fileToScaled(f,1400,data=>{
+    state.extras.push(data);
+    renderExtras();
+  }));
+  toast('Photo added');
+}
+function renderExtras(){
+  const wrap=document.getElementById('extraPhotoPreview');
+  wrap.innerHTML='';
+  state.extras.forEach((d,i)=>{
+    const div=document.createElement('div');
+    div.style.position='relative';
+    div.innerHTML='<img src="'+d+'" style="height:70px;border-radius:6px;display:block;">'+
+      '<span onclick="removeExtra('+i+')" style="position:absolute;top:-7px;right:-7px;background:#c0392b;color:#fff;width:22px;height:22px;border-radius:50%;font-size:14px;line-height:22px;text-align:center;cursor:pointer;font-weight:700;">×</span>';
+    wrap.appendChild(div);
+  });
+}
+function removeExtra(i){state.extras.splice(i,1);renderExtras();}
+
+/* ---------- signature pads ---------- */
+const pads={};
+function initPads(){
+  document.querySelectorAll('canvas.sig').forEach(cv=>{
+    const ratio=window.devicePixelRatio||1;
+    const rect=cv.getBoundingClientRect();
+    cv.width=rect.width*ratio;cv.height=rect.height*ratio;
+    const ctx=cv.getContext('2d');ctx.scale(ratio,ratio);
+    ctx.lineWidth=2.2;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#13202e';
+    pads[cv.dataset.pad]={cv,ctx,drawing:false,empty:true};
+    const pos=e=>{const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};};
+    const start=e=>{e.preventDefault();const p=pads[cv.dataset.pad];p.drawing=true;p.empty=false;const c=pos(e);ctx.beginPath();ctx.moveTo(c.x,c.y);};
+    const move=e=>{const p=pads[cv.dataset.pad];if(!p.drawing)return;e.preventDefault();const c=pos(e);ctx.lineTo(c.x,c.y);ctx.stroke();};
+    const end=()=>{pads[cv.dataset.pad].drawing=false;};
+    cv.addEventListener('mousedown',start);cv.addEventListener('mousemove',move);window.addEventListener('mouseup',end);
+    cv.addEventListener('touchstart',start,{passive:false});cv.addEventListener('touchmove',move,{passive:false});cv.addEventListener('touchend',end);
+  });
+  document.querySelectorAll('[data-clear]').forEach(el=>{
+    el.addEventListener('click',()=>{const p=pads[el.dataset.clear];p.ctx.clearRect(0,0,p.cv.width,p.cv.height);p.empty=true;});
+  });
+}
+function padData(name){const p=pads[name];return p&&!p.empty?p.cv.toDataURL('image/png'):null;}
+
+/* ---------- draft save/load (in-memory + sessionless via window) ---------- */
+function collect(){
+  const g=id=>document.getElementById(id).value;
+  return {
+    projectName:g('projectName'),subcontractor:g('subcontractor'),system:g('system'),
+    location:g('location'),drawingRef:g('drawingRef'),pipeMaterial:g('pipeMaterial'),
+    workingPressure:g('workingPressure'),testPressure:g('testPressure'),duration:g('duration'),
+    startDate:g('startDate'),startTime:g('startTime'),startReading:g('startReading'),
+    endDate:g('endDate'),endTime:g('endTime'),endReading:g('endReading'),
+    pressureDrop:document.getElementById('pressureDrop').value,
+    result:state.result,reinspect:state.reinspect,nextwork:state.nextwork,remarks:g('remarks'),
+    subName:g('subName'),subCompany:g('subCompany'),subDate:g('subDate'),
+    mainName:g('mainName'),mainCompany:g('mainCompany'),mainDate:g('mainDate'),
+    clientName:g('clientName'),clientCompany:g('clientCompany'),clientDate:g('clientDate')
+  };
+}
+let draftMem=null;
+function saveDraft(){draftMem=collect();toast('Draft saved for this session');}
+
+/* ---------- PDF generation matching ATC-11 ---------- */
+function fmtDateTime(d,t){if(!d&&!t)return'';if(d&&t)return d+'  '+t;return d||t;}
+function generatePDF(){
+  const d=collect();
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'letter'}); // 612 x 792
+  const PW=612, M=40, RW=PW-M*2;
+  let y=M;
+
+  const navy=[10,35,66], steel=[29,78,137], line=[170,182,196], ink=[19,32,46];
+  function hr(yy,col){col=col||line;doc.setDrawColor(...col);doc.setLineWidth(1);doc.line(M,yy,PW-M,yy);}
+
+  /* header band */
+  doc.setFillColor(...navy);doc.rect(0,0,PW,52,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');doc.setFontSize(20);
+  doc.text('SHMZ',M,26);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');
+  doc.text('SHIMIZU NORTH AMERICA LLC',M,40);
+  doc.setFontSize(8);
+  doc.text('2100 Riveredge Parkway, Suite 1100, Atlanta, GA 30328',PW-M,30,{align:'right'});
+  doc.text('FORM NO.: ATC-11   REV.0',PW-M,42,{align:'right'});
+  y=70;
+
+  doc.setTextColor(...ink);
+  doc.setFont('helvetica','bold');doc.setFontSize(14);
+  doc.text('PIPE PRESSURE AND LEAKAGE FUNCTION TEST',PW/2,y,{align:'center'});
+  y+=8;hr(y,navy);y+=18;
+
+  /* label : value rows */
+  function labelVal(label,val,yy,half,xoff){
+    doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...steel);
+    doc.text(label.toUpperCase(),(xoff||M),yy);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...ink);
+    const lx=(xoff||M)+ (half? 110:120);
+    doc.text(val||'',lx,yy);
+    const lineW=(half? (RW/2-20):RW)-((half?110:120));
+    doc.setDrawColor(...line);doc.setLineWidth(.7);doc.line(lx,yy+3,lx+lineW,yy+3);
+  }
+  const ident=[['Subcontractor',d.subcontractor],['System (Service)',d.system],['Location',d.location],['Drawing Ref',d.drawingRef],['Pipe Material',d.pipeMaterial]];
+  // project name row at very top of body
+  labelVal('Project Name',d.projectName,y);y+=22;
+  ident.forEach(p=>{labelVal(p[0],p[1],y);y+=22;});
+  y+=2;hr(y);y+=18;
+
+  /* specification */
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+  doc.text('SPECIFICATION',M,y);y+=16;
+  labelVal('Working Pressure',(d.workingPressure?d.workingPressure+' psi':''),y,true);
+  labelVal('Test Pressure',(d.testPressure?d.testPressure+' psi':''),y,true,M+RW/2);y+=22;
+  labelVal('Duration / Test Time',(d.duration?d.duration+' hours':''),y,true);y+=24;
+  hr(y);y+=18;
+
+  /* readings two columns */
+  const colL=M, colR=M+RW/2;
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+  doc.text('START',colL,y);doc.text('COMPLETE',colR,y);y+=16;
+  function rdg(label,lval,rval,yy){
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...steel);
+    doc.text(label.toUpperCase(),colL,yy);doc.text(label.toUpperCase(),colR,yy);
+    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
+    doc.text(lval||'',colL+78,yy);doc.text(rval||'',colR+78,yy);
+    doc.setDrawColor(...line);doc.setLineWidth(.7);
+    doc.line(colL+78,yy+3,colL+RW/2-20,yy+3);
+    doc.line(colR+78,yy+3,colR+RW/2-20,yy+3);
+  }
+  rdg('Date',d.startDate,d.endDate,y);y+=20;
+  rdg('Time',d.startTime,d.endTime,y);y+=20;
+  rdg('Pressure',(d.startReading?d.startReading+' psi':''),(d.endReading?d.endReading+' psi':''),y);y+=20;
+  // pressure drop (single, under complete column)
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...steel);
+  doc.text('PRESSURE DROP',colR,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
+  doc.text(d.pressureDrop||'',colR+85,y);
+  doc.setDrawColor(...line);doc.line(colR+85,y+3,colR+RW/2-20,y+3);
+  y+=22;hr(y);y+=16;
+
+  /* photos */
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...steel);
+  doc.text('PHOTO (START)',colL,y);doc.text('PHOTO (COMPLETE)',colR,y);y+=8;
+  const boxW=RW/2-15, boxH=110;
+  function photoBox(img,x,yy){
+    doc.setDrawColor(...line);doc.setLineWidth(1);doc.rect(x,yy,boxW,boxH);
+    if(img){
+      try{
+        const props=doc.getImageProperties(img);
+        const r=Math.min(boxW/props.width,boxH/props.height);
+        const w=props.width*r,h=props.height*r;
+        doc.addImage(img,'JPEG',x+(boxW-w)/2,yy+(boxH-h)/2,w,h);
+      }catch(e){}
+    }
+  }
+  photoBox(state.startPhoto,colL,y);
+  photoBox(state.endPhoto,colR,y);
+  y+=boxH+14;hr(y);y+=16;
+
+  /* inspection result */
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+  doc.text('INSPECTION RESULT',M,y);y+=16;
+  function chk(label,checked,x,yy){
+    doc.setDrawColor(...ink);doc.setLineWidth(1);doc.rect(x,yy-9,11,11);
+    if(checked){doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...steel);doc.text('X',x+1.7,yy);}
+    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
+    doc.text(label,x+17,yy);
+  }
+  chk('Approved',d.result==='Approved',M,y);
+  chk('Approved with Comment',d.result==='Approved with Comment',M+150,y);
+  chk('Not Approved',d.result==='Not Approved',M+340,y);
+  y+=22;
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
+  doc.text('Re-inspection Required',M,y);
+  chk('Yes',d.reinspect==='Yes',M+160,y);chk('No',d.reinspect==='No',M+230,y);y+=22;
+  doc.text('Acceptable for Next Work',M,y);
+  chk('Yes',d.nextwork==='Yes',M+160,y);chk('No',d.nextwork==='No',M+230,y);y+=22;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...navy);
+  doc.text('REMARK / NON-CONFORMANCE',M,y);y+=6;
+  doc.setDrawColor(...line);doc.setLineWidth(.7);
+  const remLines=doc.splitTextToSize(d.remarks||'',RW-6);
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(...ink);
+  doc.text(remLines,M+2,y+12);
+  const remH=Math.max(34,remLines.length*12+10);
+  doc.rect(M,y+2,RW,remH);
+  y+=remH+14;hr(y);y+=16;
+
+  /* signatures */
+  const sigColW=RW/3-8;
+  const sigs=[
+    ['SUB CONTRACTOR',d.subName,d.subCompany,d.subDate,padData('subSig')],
+    ['MAIN CONTRACTOR',d.mainName,d.mainCompany,d.mainDate,padData('mainSig')],
+    ["CLIENT/CLIENT'S REP",d.clientName,d.clientCompany,d.clientDate,padData('clientSig')]
+  ];
+  sigs.forEach((s,i)=>{
+    const x=M+i*(sigColW+12);
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+    doc.text(s[0],x,y);
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...steel);
+    doc.text('Witness',x,y+11);
+    if(s[4]){try{doc.addImage(s[4],'PNG',x,y+15,sigColW-4,32);}catch(e){}}
+    let yy=y+58;
+    doc.setDrawColor(...line);doc.setLineWidth(.6);doc.line(x,yy,x+sigColW,yy);
+    doc.setFontSize(8);doc.setTextColor(...ink);
+    doc.text('Name: '+(s[1]||''),x,yy+11);
+    doc.text('Company: '+(s[2]||''),x,yy+23);
+    doc.text('Date: '+(s[3]||''),x,yy+35);
+  });
+  y+=110;
+
+  /* footer */
+  doc.setFontSize(7);doc.setTextColor(...steel);
+  doc.text('REV.0',M,775);
+  doc.text('FORM NO.: ATC-11',PW/2,775,{align:'center'});
+  doc.text('ISSUED DATE: 10-01-07',PW-M,775,{align:'right'});
+
+  const fname=('PressureTest_'+(d.projectName||'Form')+'_'+(d.startDate||'')).replace(/[^a-z0-9_\-]/gi,'_')+'.pdf';
+  doc.save(fname);
+  toast('PDF generated');
+}
+
+window.addEventListener('load',()=>{
+  initPads();
+  const today=new Date().toISOString().slice(0,10);
+  ['startDate','endDate','subDate','mainDate','clientDate'].forEach(id=>{if(!document.getElementById(id).value)document.getElementById(id).value=today;});
+});
+window.addEventListener('resize',()=>{/* pads keep last drawing on resize loss is acceptable for field use */});
+</script>
+</body>
+</html>
