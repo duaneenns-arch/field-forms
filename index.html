@@ -644,15 +644,10 @@ async function dbDeleteForm(id){
   if(MODE==='live'){await FB.deleteDoc(FB.doc(FB.db,'forms',id));}
   else{localSaveAll(localGetAll().filter(f=>f.id!==id));}
 }
-// upload a dataURL photo, return a storable reference (URL in live, dataURL in local)
+// Option A: photos are stored INLINE as compressed data URLs (saved into Firestore
+// with the form). No Firebase Storage / Blaze needed. Returns the dataURL unchanged.
 async function dbStorePhoto(formId,name,dataUrl){
-  if(!dataUrl) return null;
-  if(MODE==='live'){
-    const r=FB.sRef(FB.storage,`photos/${currentUser.uid}/${formId}/${name}.jpg`);
-    await FB.uploadString(r,dataUrl,'data_url');
-    return await FB.getDownloadURL(r);
-  }
-  return dataUrl; // local: keep inline
+  return dataUrl || null;
 }
 
 /* ============ DASHBOARD RENDER ============ */
@@ -853,11 +848,11 @@ function fileToScaled(file,maxDim,cb){
     let{width:w,height:h}=img;const scale=Math.min(1,maxDim/Math.max(w,h));
     w=Math.round(w*scale);h=Math.round(h*scale);
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-    cb(c.toDataURL('image/jpeg',0.8));};img.src=e.target.result;};
+    cb(c.toDataURL('image/jpeg',0.7));};img.src=e.target.result;};
   reader.readAsDataURL(file);
 }
-function loadPhoto(input,which){if(!input.files[0])return;fileToScaled(input.files[0],1200,d=>{state[which+'Photo']=d;document.getElementById(which+'PhotoPreview').innerHTML='<img src="'+d+'">';dirty=true;toast((which==='start'?'Start':'End')+' photo added');});}
-function loadExtra(input){[...input.files].forEach(f=>fileToScaled(f,1200,d=>{state.extras.push(d);renderExtras();dirty=true;}));toast('Photo added');}
+function loadPhoto(input,which){if(!input.files[0])return;fileToScaled(input.files[0],1000,d=>{state[which+'Photo']=d;document.getElementById(which+'PhotoPreview').innerHTML='<img src="'+d+'">';dirty=true;toast((which==='start'?'Start':'End')+' photo added');});}
+function loadExtra(input){[...input.files].forEach(f=>fileToScaled(f,1000,d=>{state.extras.push(d);renderExtras();dirty=true;}));toast('Photo added');}
 function renderExtras(){const wrap=document.getElementById('extraPhotoPreview');wrap.innerHTML='';state.extras.forEach((d,i)=>{const div=document.createElement('div');div.style.position='relative';div.innerHTML='<img src="'+d+'" style="height:70px;border-radius:6px;display:block;">'+'<span onclick="removeExtra('+i+')" style="position:absolute;top:-7px;right:-7px;background:#b23b2e;color:#fff;width:22px;height:22px;border-radius:50%;font-size:14px;line-height:22px;text-align:center;cursor:pointer;font-weight:700;">×</span>';wrap.appendChild(div);});}
 function removeExtra(i){state.extras.splice(i,1);renderExtras();dirty=true;}
 
@@ -897,10 +892,12 @@ async function persist(statusVal, historyAction){
   try{
     if(MODE==='live'){
       const fid=rec.id||FB.doc(FB.collection(FB.db,'forms')).id; rec.id=fid;
-      rec.startPhoto=await dbStorePhoto(fid,'start',state.startPhoto);
-      rec.endPhoto=await dbStorePhoto(fid,'end',state.endPhoto);
-      const ex=[];for(let i=0;i<state.extras.length;i++){ex.push(await dbStorePhoto(fid,'extra'+i,state.extras[i]));}
-      rec.extras=ex;
+      // photos stored inline (Option A): make sure the whole record fits Firestore's ~1MB limit
+      const approxBytes=JSON.stringify(rec).length;
+      if(approxBytes > 950000){
+        toast('Too many/large photos to sync (over ~1MB). Remove a photo or use fewer.');
+        return false;
+      }
     }
     const id=await dbSaveForm(rec);
     currentFormId=id;dirty=false;
