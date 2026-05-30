@@ -134,8 +134,18 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
 
 /* ---- footer action bar ---- */
 .footer-bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 18px;display:flex;gap:10px;z-index:30;box-shadow:0 -4px 16px rgba(0,0,0,.06);}
-.footer-bar .max{max-width:1000px;margin:0 auto;display:flex;gap:10px;width:100%;}
-.footer-bar .btn{flex:1;padding:15px;}
+.footer-bar .max{max-width:1000px;margin:0 auto;display:flex;gap:10px;width:100%;flex-wrap:wrap;}
+.footer-bar .btn{flex:1 1 auto;min-width:110px;padding:15px;}
+.btn-complete{background:var(--ok);color:#fff;}
+.edit-warning{background:#fff7ed;border:1px solid #ffd9b3;color:#8a4b12;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:14px;line-height:1.45;display:flex;gap:10px;align-items:flex-start;}
+.edit-warning b{color:#b23b2e;}
+.edit-history{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:16px;overflow:hidden;}
+.edit-history h2{margin:0;background:#efe9dc;padding:12px 16px;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--navy);border-bottom:1px solid var(--line);}
+.edit-history .body{padding:8px 16px;}
+.edit-history ul{list-style:none;margin:0;padding:0;}
+.edit-history li{padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;color:#44505c;}
+.edit-history li:last-child{border-bottom:none;}
+.edit-history li b{color:var(--navy);}
 
 /* ---- toast + spinner ---- */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 22px;border-radius:30px;font-weight:700;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4);}
@@ -226,6 +236,16 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
       <button class="btn btn-sec btn-sm" onclick="confirmLeave()">‹ Back to Dashboard</button>
     </div>
     <h1 id="formHeading" style="color:var(--navy);margin:0 0 16px;font-size:24px;">New Pressure Test</h1>
+
+    <div id="editWarning" class="edit-warning hidden">
+      <span>⚠️</span>
+      <div><b>You are editing a finished form.</b> <span id="editWarningStatus"></span> Any changes you save will be recorded in the edit history below with the date and time.</div>
+    </div>
+
+    <div id="editHistory" class="edit-history hidden">
+      <h2>Edit History</h2>
+      <div class="body"><ul id="editHistoryList"></ul></div>
+    </div>
 
     <div class="section">
       <h2>Project Identification</h2>
@@ -347,8 +367,9 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
 <div class="footer-bar hidden" id="footerBar">
   <div class="max">
     <button class="btn btn-sec" onclick="saveDraft()">Save Draft</button>
-    <button class="btn btn-sec" onclick="shareCurrent()">Share PDF</button>
+    <button class="btn btn-complete" onclick="markComplete()">Mark Complete</button>
     <button class="btn btn-primary" onclick="completeAndPDF()">Generate PDF</button>
+    <button class="btn btn-sec" onclick="shareCurrent()" title="Share PDF">Share</button>
   </div>
 </div>
 
@@ -442,7 +463,7 @@ async function signInTapped(){
   }
 }
 
-const state={ result:"",reinspect:"",nextwork:"",startPhoto:null,endPhoto:null,extras:[],status:"draft",demo:false,formType:"atc11_pressure_test",createdAt:null };
+const state={ result:"",reinspect:"",nextwork:"",startPhoto:null,endPhoto:null,extras:[],status:"draft",demo:false,formType:"atc11_pressure_test",createdAt:null,completedAt:null,editHistory:[] };
 
 /* ============================================================
    FORM TYPE REGISTRY (future-ready)
@@ -707,7 +728,7 @@ const FIELDS=['projectName','subcontractor','system','location','drawingRef','pi
 function resetForm(){
   FIELDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value=(id==='mainCompany'?'SHIMIZU North America':'');});
   state.result='';state.reinspect='';state.nextwork='';state.startPhoto=null;state.endPhoto=null;state.extras=[];state.status='draft';
-  state.formType='atc11_pressure_test';state.createdAt=null;
+  state.formType='atc11_pressure_test';state.createdAt=null;state.completedAt=null;state.editHistory=[];
   document.querySelectorAll('#resultSeg button,.yn button').forEach(b=>b.classList.remove('on'));
   document.getElementById('startPhotoPreview').innerHTML='';
   document.getElementById('endPhotoPreview').innerHTML='';
@@ -721,7 +742,37 @@ function newForm(){
   const today=new Date().toISOString().slice(0,10);
   document.getElementById('startDate').value=today;
   document.getElementById('formHeading').textContent='New Pressure Test';
+  updateFinishedUI();
   showFormView();initPads();
+}
+
+/* show/hide the "editing a finished form" warning + edit-history panel */
+function fmtStamp(ts){ if(!ts) return ''; const d=new Date(ts); return d.toLocaleString(); }
+function updateFinishedUI(){
+  const finished = state.status==='completed' || state.status==='pdf_generated';
+  const warn=document.getElementById('editWarning');
+  const hist=document.getElementById('editHistory');
+  if(finished){
+    warn.classList.remove('hidden');
+    const lbl = state.status==='completed' ? 'This form is marked Completed.' : 'This form is marked PDF Generated.';
+    document.getElementById('editWarningStatus').textContent=lbl;
+  } else {
+    warn.classList.add('hidden');
+  }
+  // edit history (show whenever there are entries)
+  const list=document.getElementById('editHistoryList');
+  if(state.editHistory && state.editHistory.length){
+    hist.classList.remove('hidden');
+    list.innerHTML=state.editHistory.slice().reverse().map(e=>
+      `<li><b>${esc(fmtStamp(e.at))}</b> — ${esc(e.action)}</li>`).join('');
+  } else {
+    hist.classList.add('hidden');
+    list.innerHTML='';
+  }
+}
+function addHistory(action){
+  if(!Array.isArray(state.editHistory)) state.editHistory=[];
+  state.editHistory.push({ at:Date.now(), action });
 }
 async function openForm(id){
   spin(true);
@@ -735,6 +786,8 @@ async function openForm(id){
     state.status=f.status||'draft';
     state.formType=f.formType||'atc11_pressure_test';
     state.createdAt=f.createdAt||null;
+    state.completedAt=f.completedAt||null;
+    state.editHistory=Array.isArray(f.editHistory)?f.editHistory:[];
     // restore segment buttons
     document.querySelectorAll('#resultSeg button').forEach(b=>b.classList.toggle('on',b.dataset.val===state.result));
     document.querySelectorAll('#reinspectYN button').forEach(b=>b.classList.toggle('on',b.dataset.val===state.reinspect));
@@ -745,6 +798,7 @@ async function openForm(id){
     currentFormId=id;dirty=false;
     const statusNote=state.status==='completed'?' (Completed)':(state.status==='pdf_generated'?' (PDF Generated)':'');
     document.getElementById('formHeading').textContent=(f.projectName||'Pressure Test')+statusNote;
+    updateFinishedUI();
     showFormView();initPads();
     // restore signatures
     ['subSig','mainSig','clientSig'].forEach(p=>{if(f[p])restorePad(p,f[p]);});
@@ -762,6 +816,8 @@ function collect(){
   o.formType=state.formType||'atc11_pressure_test';
   o.formTypeLabel=FORM_TYPES[o.formType]?FORM_TYPES[o.formType].label:'ATC-11 Pressure Test';
   o.createdAt=state.createdAt||Date.now();
+  o.completedAt=state.completedAt||null;
+  o.editHistory=state.editHistory||[];
   if(currentFormId)o.id=currentFormId;
   return o;
 }
@@ -826,12 +882,16 @@ function padData(name){const p=pads[name];return p&&!p.empty?p.cv.toDataURL('ima
 function restorePad(name,dataUrl){const p=pads[name];if(!p)return;const img=new Image();img.onload=()=>{const r=window.devicePixelRatio||1;p.ctx.drawImage(img,0,0,p.cv.width/r,p.cv.height/r);p.empty=false;};img.src=dataUrl;}
 
 /* ---------- save draft / complete ---------- */
-async function persist(statusVal){
+async function persist(statusVal, historyAction){
+  // Record an edit-history entry when modifying a form that was ALREADY finished.
+  const wasFinished = (state.status==='completed' || state.status==='pdf_generated');
   state.status=statusVal;
+  if(statusVal==='completed' && !state.completedAt) state.completedAt=Date.now();
+  if(historyAction){ addHistory(historyAction); }
+  else if(wasFinished){ addHistory('Saved changes'); }
   const rec=collect();
   spin(true);
   try{
-    // upload photos to storage in live mode, swap dataURLs for URLs
     if(MODE==='live'){
       const fid=rec.id||FB.doc(FB.collection(FB.db,'forms')).id; rec.id=fid;
       rec.startPhoto=await dbStorePhoto(fid,'start',state.startPhoto);
@@ -841,23 +901,40 @@ async function persist(statusVal){
     }
     const id=await dbSaveForm(rec);
     currentFormId=id;dirty=false;
-    toast(statusVal==='completed'?'Form completed & saved':'Draft saved');
+    const msg={draft:'Draft saved',completed:'Form marked Complete',pdf_generated:'Saved'}[statusVal]||'Saved';
+    toast(msg);
+    updateFinishedUI();
     return true;
   }catch(e){console.error(e);toast('Save failed — '+(e.message||'try again'));return false;}
   finally{spin(false);}
 }
-async function saveDraft(){ await persist('draft'); }
+async function saveDraft(){
+  // saving a draft on an already-finished form is itself an edit worth logging
+  const wasFinished=(state.status==='completed'||state.status==='pdf_generated');
+  if(wasFinished){ await persist(state.status,'Saved changes'); }
+  else { await persist('draft'); }
+}
+async function markComplete(){
+  if(!validateRequired())return;
+  const wasFinished=(state.status==='completed'||state.status==='pdf_generated');
+  await persist('completed', wasFinished ? 'Saved changes (re-confirmed Complete)' : 'Marked Complete');
+}
 async function shareCurrent(){
   if(!validateRequired())return;
-  // ensure saved first, then share
-  if(state.status==='draft') state.status='completed';
-  const ok=await persist(state.status);
-  if(ok){ await buildPDF(collectForPDF(),'share'); await markPdfGenerated(); }
+  const wasFinished=(state.status==='completed'||state.status==='pdf_generated');
+  await persist('pdf_generated', wasFinished ? 'Edited & re-shared PDF' : 'Generated & shared PDF');
+  await buildPDF(collectForPDF(),'share');
 }
 async function completeAndPDF(){
   if(!validateRequired())return;
-  const ok=await persist('completed');
-  if(ok){ await buildPDF(collectForPDF(),'save'); markPdfGenerated(); }
+  const wasFinished=(state.status==='completed'||state.status==='pdf_generated');
+  // persist final status (and history) BEFORE generating — a mobile download can halt JS
+  const ok=await persist('pdf_generated', wasFinished ? 'Edited & regenerated PDF' : 'Generated PDF');
+  if(ok){
+    await buildPDF(collectForPDF(),'save');
+    dirty=false;
+    setTimeout(()=>{ showDash(); }, 400);
+  }
 }
 async function regenPDF(id){
   spin(true);
@@ -871,17 +948,13 @@ async function sharePDF(id){
   catch(e){console.error(e);toast('Could not share PDF');}
   finally{spin(false);}
 }
-// flip the currently-open form to "PDF Generated" (unless it's still a draft being edited)
-async function markPdfGenerated(){
-  if(!currentFormId)return;
-  state.status='pdf_generated';
-  const rec=collect();
-  try{ await dbSaveForm(rec); }catch(e){}
-}
 async function markPdfGeneratedFor(f){
-  if((f.status||'draft')==='draft')return; // don't silently complete a draft from the dashboard
-  if(f.status==='pdf_generated')return;
+  const s=(f.status||'draft');
+  if(s==='draft') return;            // don't silently complete a draft from the dashboard
+  if(s==='pdf_generated') return;
   f.status='pdf_generated';
+  if(!Array.isArray(f.editHistory)) f.editHistory=[];
+  f.editHistory.push({ at:Date.now(), action:'Generated PDF from dashboard' });
   try{ await dbSaveForm(f); await loadForms(); }catch(e){}
 }
 function collectForPDF(){return collect();}
