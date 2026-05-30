@@ -223,7 +223,7 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
   <!-- FORM -->
   <div id="formView" class="wrap hidden">
     <div class="form-top">
-      <button class="back-link" onclick="confirmLeave()">‹ Back to dashboard</button>
+      <button class="btn btn-sec btn-sm" onclick="confirmLeave()">‹ Back to Dashboard</button>
     </div>
     <h1 id="formHeading" style="color:var(--navy);margin:0 0 16px;font-size:24px;">New Pressure Test</h1>
 
@@ -637,23 +637,34 @@ async function dbStorePhoto(formId,name,dataUrl){
 /* ============ DASHBOARD RENDER ============ */
 function setTab(t){currentTab=t;document.querySelectorAll('#dashTabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));renderList();}
 let _cache=[];
+function normStatus(s){
+  s=(s||'').toString().trim().toLowerCase();
+  if(s==='completed') return 'completed';
+  if(s==='pdf_generated'||s==='pdf generated'||s==='pdfgenerated') return 'pdf_generated';
+  return 'draft'; // default for blank/legacy/unknown
+}
 async function loadForms(){
   spin(true);
-  try{ _cache=await dbGetForms(); renderList(); }
+  try{
+    _cache=await dbGetForms();
+    _cache.forEach(f=>{ f.status=normStatus(f.status); }); // normalize so tabs always match
+    renderList();
+  }
   catch(e){ toast('Could not load forms'); console.error(e); _cache=[]; renderList(); }
   finally{ spin(false); }
 }
 function renderList(){
   const host=document.getElementById('formList');
   let items=_cache.slice();
-  if(currentTab!=='all') items=items.filter(f=>(f.status||'draft')===currentTab);
+  if(currentTab!=='all') items=items.filter(f=>normStatus(f.status)===currentTab);
   let html='<div class="cards"><div class="newcard" onclick="newForm()">+ New Pressure Test</div>';
   if(items.length===0 && currentTab!=='all'){
-    html+='</div><div class="empty-state"><div class="big">📋</div>No '+currentTab+' forms yet.</div>';
+    const tabName={draft:'draft',completed:'completed',pdf_generated:'PDF-generated'}[currentTab]||currentTab;
+    html+='</div><div class="empty-state"><div class="big">📋</div>No '+tabName+' forms yet.</div>';
     host.innerHTML=html;return;
   }
   items.forEach(f=>{
-    const st=(f.status||'draft');
+    const st=normStatus(f.status);
     const stLabel={draft:'Draft',completed:'Completed',pdf_generated:'PDF Generated'}[st]||st;
     const dt=f.startDate||(f.updatedAt?new Date(f.updatedAt).toISOString().slice(0,10):'');
     const typeLabel=f.formTypeLabel||(FORM_TYPES[f.formType]&&FORM_TYPES[f.formType].label)||'ATC-11 Pressure Test';
