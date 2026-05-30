@@ -678,10 +678,13 @@ function renderList(){
   const host=document.getElementById('formList');
   let items=_cache.slice();
   if(currentTab!=='all') items=items.filter(f=>normStatus(f.status)===currentTab);
-  let html='<div class="cards"><div class="newcard" onclick="newForm()">+ New Pressure Test</div>';
-  if(items.length===0 && currentTab!=='all'){
-    const tabName={draft:'draft',completed:'completed',pdf_generated:'PDF-generated'}[currentTab]||currentTab;
-    html+='</div><div class="empty-state"><div class="big">📋</div>No '+tabName+' forms yet.</div>';
+  let html='<div class="cards">';
+  if(items.length===0){
+    const tabName={draft:'draft',completed:'completed',pdf_generated:'PDF-generated'}[currentTab]||'';
+    const msg = currentTab==='all'
+      ? 'No forms yet. Tap “+ Create New Form” to start one.'
+      : 'No '+tabName+' forms yet.';
+    html+='</div><div class="empty-state"><div class="big">📋</div>'+msg+'</div>';
     host.innerHTML=html;return;
   }
   items.forEach(f=>{
