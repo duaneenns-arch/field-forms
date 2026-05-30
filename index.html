@@ -87,6 +87,7 @@ input,select,textarea{font-family:inherit;}
 .status{font-size:11px;font-weight:800;letter-spacing:.5px;padding:4px 10px;border-radius:20px;text-transform:uppercase;}
 .status.draft{background:#fff1d6;color:var(--warn);}
 .status.completed{background:#dff0e6;color:var(--ok);}
+.status.pdf_generated{background:#dde7f4;color:var(--steel);}
 .fcard .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
 .empty-state .big{font-size:46px;margin-bottom:10px;}
@@ -155,7 +156,7 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
     <div class="land-tag">SHIMIZU North America</div>
     <p class="land-desc">Digital jobsite inspection forms. Fill them out on any device, capture photos and signatures, generate the official ATC-11 PDF, and pick up where you left off anywhere.</p>
     <div class="land-actions">
-      <button class="btn btn-primary" onclick="openAuth('signin')">Sign In</button>
+      <button class="btn btn-primary" onclick="signInTapped()">Sign In</button>
       <button class="btn btn-sec" onclick="startDemo()">Start Demo Form</button>
     </div>
     <div class="feat">
@@ -214,6 +215,7 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
       <button class="on" data-tab="all" onclick="setTab('all')">All</button>
       <button data-tab="draft" onclick="setTab('draft')">Drafts</button>
       <button data-tab="completed" onclick="setTab('completed')">Completed</button>
+      <button data-tab="pdf_generated" onclick="setTab('pdf_generated')">PDF Generated</button>
     </div>
     <div id="formList"></div>
   </div>
@@ -345,6 +347,7 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
 <div class="footer-bar hidden" id="footerBar">
   <div class="max">
     <button class="btn btn-sec" onclick="saveDraft()">Save Draft</button>
+    <button class="btn btn-sec" onclick="shareCurrent()">Share PDF</button>
     <button class="btn btn-primary" onclick="completeAndPDF()">Generate PDF</button>
   </div>
 </div>
@@ -357,7 +360,7 @@ canvas.sig{width:100%;height:120px;display:block;touch-action:none;}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-         signOut as fbSignOut, GoogleAuthProvider, signInWithPopup }
+         signOut as fbSignOut, GoogleAuthProvider, signInWithPopup, signInAnonymously }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc,
          query, where, orderBy, serverTimestamp }
@@ -392,7 +395,7 @@ if(LIVE){
 window.FB = {
   LIVE, auth, db, storage,
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  fbSignOut, GoogleAuthProvider, signInWithPopup,
+  fbSignOut, GoogleAuthProvider, signInWithPopup, signInAnonymously,
   collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, where, orderBy, serverTimestamp,
   sRef, uploadString, getDownloadURL
 };
@@ -407,7 +410,61 @@ window.dispatchEvent(new Event('fb-ready'));
    ======================================================================= */
 
 let FB=null, MODE='local', currentUser=null, currentFormId=null, dirty=false, currentTab='all';
-const state={ result:"",reinspect:"",nextwork:"",startPhoto:null,endPhoto:null,extras:[],status:"draft",demo:false };
+
+/* DEMO_AUTH: when true, the Sign In button enters the app immediately with no
+   password. Flip to false later to require real authentication — the existing
+   email/password + Google modal and Firebase flow take over automatically,
+   no other code changes needed. */
+const DEMO_AUTH = true;
+
+/* In demo mode with Firebase configured, all devices share one workspace id so
+   the same inspections appear on iPhone, iPad, and laptop. With real auth later,
+   each user's own uid replaces this automatically. */
+const DEMO_WORKSPACE = 'demo-shared';
+
+async function signInTapped(){
+  if(!DEMO_AUTH){ openAuth('signin'); return; } // real auth path (DEMO_AUTH=false)
+  if(MODE==='live'){
+    // anonymous Firebase session, but read/write the shared demo workspace
+    spin(true);
+    try{
+      await FB.signInAnonymously(FB.auth);
+      currentUser={uid:DEMO_WORKSPACE,email:'',demo:true};
+      enterApp();
+    }catch(e){
+      console.error(e);
+      toast('Could not start demo session — check Firebase Anonymous sign-in is enabled');
+    }finally{ spin(false); }
+  } else {
+    currentUser={uid:'demo-user',email:'',demo:true};
+    localStorage.setItem('ff_user',JSON.stringify(currentUser));
+    enterApp();
+  }
+}
+
+const state={ result:"",reinspect:"",nextwork:"",startPhoto:null,endPhoto:null,extras:[],status:"draft",demo:false,formType:"atc11_pressure_test",createdAt:null };
+
+/* ============================================================
+   FORM TYPE REGISTRY (future-ready)
+   ATC-11 is the only ACTIVE type today. Adding a new form type
+   later = add an entry here with active:true and build its form
+   section; storage, dashboard, drafts, and PDF list already key
+   off formType, so no structural rebuild is needed.
+   ============================================================ */
+const FORM_TYPES = {
+  atc11_pressure_test: { label:'ATC-11 Pressure Test', active:true },
+  // --- planned modules (inactive until built) ---
+  leakage_test:        { label:'Leakage Test', active:false },
+  underground_insp:    { label:'Underground Inspection', active:false },
+  above_ceiling_insp:  { label:'Above Ceiling Inspection', active:false },
+  ceiling_insp:        { label:'Ceiling Inspection', active:false },
+  equipment_startup:   { label:'Equipment Startup', active:false },
+  daily_report:        { label:'Daily Report', active:false },
+  safety_observation:  { label:'Safety Observation', active:false },
+  punch_list:          { label:'Punch List', active:false },
+  deficiency_tracking: { label:'Deficiency Tracking', active:false },
+  commissioning:       { label:'Commissioning Form', active:false }
+};
 
 /* ---------- boot ---------- */
 function boot(){
@@ -416,8 +473,15 @@ function boot(){
   document.getElementById('modeSign').textContent = MODE==='live' ? 'Firebase: connected' : 'Local mode (add Firebase keys to sync)';
   if(MODE==='live'){
     FB.onAuthStateChanged(FB.auth,u=>{
-      if(u){ currentUser={uid:u.uid,email:u.email}; enterApp(); }
-      else { currentUser=null; showLanding(); }
+      if(u){
+        if(u.isAnonymous && DEMO_AUTH){
+          // demo session: all devices share one workspace
+          currentUser={uid:DEMO_WORKSPACE,email:'',demo:true};
+        } else {
+          currentUser={uid:u.uid,email:u.email};
+        }
+        enterApp();
+      } else { currentUser=null; showLanding(); }
     });
   } else {
     const saved=localStorage.getItem('ff_user');
@@ -590,19 +654,23 @@ function renderList(){
   }
   items.forEach(f=>{
     const st=(f.status||'draft');
+    const stLabel={draft:'Draft',completed:'Completed',pdf_generated:'PDF Generated'}[st]||st;
     const dt=f.startDate||(f.updatedAt?new Date(f.updatedAt).toISOString().slice(0,10):'');
+    const typeLabel=f.formTypeLabel||(FORM_TYPES[f.formType]&&FORM_TYPES[f.formType].label)||'ATC-11 Pressure Test';
+    const openLabel = st==='draft' ? 'Continue' : (st==='completed'||st==='pdf_generated' ? 'View / Edit' : 'Open');
     html+=`<div class="fcard">
       <div class="pn">${esc(f.projectName)||'(Untitled project)'}</div>
       <div class="meta">
-        <span><b>Type:</b> ATC-11 Pressure Test</span>
+        <span><b>Type:</b> ${esc(typeLabel)}</span>
         <span><b>Subcontractor:</b> ${esc(f.subcontractor)||'—'}</span>
         <span><b>Location:</b> ${esc(f.location)||'—'}</span>
         <span><b>Date:</b> ${esc(dt)||'—'}</span>
       </div>
-      <div class="tagrow"><span class="status ${st}">${st}</span></div>
+      <div class="tagrow"><span class="status ${st}">${stLabel}</span></div>
       <div class="acts">
-        <button class="btn btn-sec btn-sm" onclick="openForm('${f.id}')">${st==='completed'?'View':'Edit'}</button>
-        <button class="btn btn-sec btn-sm" onclick="regenPDF('${f.id}')">Download PDF</button>
+        <button class="btn btn-sec btn-sm" onclick="openForm('${f.id}')">${openLabel}</button>
+        <button class="btn btn-sec btn-sm" onclick="regenPDF('${f.id}')">PDF</button>
+        <button class="btn btn-sec btn-sm" onclick="sharePDF('${f.id}')">Share</button>
         <button class="btn btn-sec btn-sm" onclick="removeForm('${f.id}')" style="color:var(--bad)">Delete</button>
       </div>
     </div>`;
@@ -628,6 +696,7 @@ const FIELDS=['projectName','subcontractor','system','location','drawingRef','pi
 function resetForm(){
   FIELDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value=(id==='mainCompany'?'SHIMIZU North America':'');});
   state.result='';state.reinspect='';state.nextwork='';state.startPhoto=null;state.endPhoto=null;state.extras=[];state.status='draft';
+  state.formType='atc11_pressure_test';state.createdAt=null;
   document.querySelectorAll('#resultSeg button,.yn button').forEach(b=>b.classList.remove('on'));
   document.getElementById('startPhotoPreview').innerHTML='';
   document.getElementById('endPhotoPreview').innerHTML='';
@@ -653,6 +722,8 @@ async function openForm(id){
     state.result=f.result||'';state.reinspect=f.reinspect||'';state.nextwork=f.nextwork||'';
     state.startPhoto=f.startPhoto||null;state.endPhoto=f.endPhoto||null;state.extras=f.extras||[];
     state.status=f.status||'draft';
+    state.formType=f.formType||'atc11_pressure_test';
+    state.createdAt=f.createdAt||null;
     // restore segment buttons
     document.querySelectorAll('#resultSeg button').forEach(b=>b.classList.toggle('on',b.dataset.val===state.result));
     document.querySelectorAll('#reinspectYN button').forEach(b=>b.classList.toggle('on',b.dataset.val===state.reinspect));
@@ -661,7 +732,8 @@ async function openForm(id){
     if(state.endPhoto)document.getElementById('endPhotoPreview').innerHTML='<img src="'+state.endPhoto+'">';
     renderExtras();
     currentFormId=id;dirty=false;
-    document.getElementById('formHeading').textContent=(f.projectName||'Pressure Test')+(state.status==='completed'?' (Completed)':'');
+    const statusNote=state.status==='completed'?' (Completed)':(state.status==='pdf_generated'?' (PDF Generated)':'');
+    document.getElementById('formHeading').textContent=(f.projectName||'Pressure Test')+statusNote;
     showFormView();initPads();
     // restore signatures
     ['subSig','mainSig','clientSig'].forEach(p=>{if(f[p])restorePad(p,f[p]);});
@@ -675,6 +747,10 @@ function collect(){
   o.startPhoto=state.startPhoto;o.endPhoto=state.endPhoto;o.extras=state.extras;
   o.subSig=padData('subSig');o.mainSig=padData('mainSig');o.clientSig=padData('clientSig');
   o.status=state.status;
+  // ---- future-ready: every record is tagged with its form type ----
+  o.formType=state.formType||'atc11_pressure_test';
+  o.formTypeLabel=FORM_TYPES[o.formType]?FORM_TYPES[o.formType].label:'ATC-11 Pressure Test';
+  o.createdAt=state.createdAt||Date.now();
   if(currentFormId)o.id=currentFormId;
   return o;
 }
@@ -760,16 +836,42 @@ async function persist(statusVal){
   finally{spin(false);}
 }
 async function saveDraft(){ await persist('draft'); }
+async function shareCurrent(){
+  if(!validateRequired())return;
+  // ensure saved first, then share
+  if(state.status==='draft') state.status='completed';
+  const ok=await persist(state.status);
+  if(ok){ await buildPDF(collectForPDF(),'share'); await markPdfGenerated(); }
+}
 async function completeAndPDF(){
   if(!validateRequired())return;
   const ok=await persist('completed');
-  if(ok){ const d=collectForPDF(); buildPDF(d); }
+  if(ok){ await buildPDF(collectForPDF(),'save'); markPdfGenerated(); }
 }
 async function regenPDF(id){
   spin(true);
-  try{const f=await dbGetForm(id);if(!f){toast('Not found');return;}buildPDF(f);}
+  try{const f=await dbGetForm(id);if(!f){toast('Not found');return;}await buildPDF(f,'save');await markPdfGeneratedFor(f);}
   catch(e){toast('Could not generate PDF');}
   finally{spin(false);}
+}
+async function sharePDF(id){
+  spin(true);
+  try{const f=await dbGetForm(id);if(!f){toast('Not found');return;}await buildPDF(f,'share');await markPdfGeneratedFor(f);}
+  catch(e){console.error(e);toast('Could not share PDF');}
+  finally{spin(false);}
+}
+// flip the currently-open form to "PDF Generated" (unless it's still a draft being edited)
+async function markPdfGenerated(){
+  if(!currentFormId)return;
+  state.status='pdf_generated';
+  const rec=collect();
+  try{ await dbSaveForm(rec); }catch(e){}
+}
+async function markPdfGeneratedFor(f){
+  if((f.status||'draft')==='draft')return; // don't silently complete a draft from the dashboard
+  if(f.status==='pdf_generated')return;
+  f.status='pdf_generated';
+  try{ await dbSaveForm(f); await loadForms(); }catch(e){}
 }
 function collectForPDF(){return collect();}
 </script>
@@ -782,14 +884,43 @@ async function urlToDataUrl(u){
   try{const r=await fetch(u);const b=await r.blob();return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}
   catch(e){return null;}
 }
-async function buildPDF(d){
+async function buildPDF(d,action){
+  action=action||'save';
   spin(true);
   try{
     const startImg=await urlToDataUrl(d.startPhoto);
     const endImg=await urlToDataUrl(d.endPhoto);
-    renderPDF(d,startImg,endImg);
+    const doc=renderPDF(d,startImg,endImg);
+    const fname=('PressureTest_'+(d.projectName||'Form')+'_'+(d.startDate||'')).replace(/[^a-z0-9_\-]/gi,'_')+'.pdf';
+    if(action==='save'){
+      doc.save(fname);
+      toast('PDF generated');
+    } else if(action==='share'){
+      await sharePdfDoc(doc,fname,d);
+    }
   }catch(e){console.error(e);toast('PDF error');}
   finally{spin(false);}
+}
+/* Share via the native share sheet (iPhone/iPad: AirDrop, Mail, Messages...).
+   Falls back to an email draft with the PDF downloaded alongside. */
+async function sharePdfDoc(doc,fname,d){
+  const blob=doc.output('blob');
+  const file=new File([blob],fname,{type:'application/pdf'});
+  const subject='Pressure Test — '+(d.projectName||'FieldForms');
+  const body='Attached: ATC-11 Pipe Pressure & Leakage Function Test'
+    +(d.projectName?('\nProject: '+d.projectName):'')
+    +(d.location?('\nLocation: '+d.location):'')
+    +(d.startDate?('\nDate: '+d.startDate):'');
+  // 1) Native share with the actual file (best on iOS/iPadOS)
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],title:subject,text:body}); return; }
+    catch(e){ if(e&&e.name==='AbortError')return; /* user cancelled */ }
+  }
+  // 2) Fallback: download the PDF, then open an email draft to attach it
+  doc.save(fname);
+  const mailto='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body+'\n\n(Attach the PDF that was just downloaded: '+fname+')');
+  window.location.href=mailto;
+  toast('PDF downloaded — email draft opened');
 }
 function renderPDF(d,startImg,endImg){
   const { jsPDF }=window.jspdf;
@@ -870,9 +1001,7 @@ function renderPDF(d,startImg,endImg){
   doc.setFont('helvetica','normal');doc.setFontSize(7.5);
   txt('REV.0',M,PH-22);txt('FORM NO.: ATC-11',PW/2,PH-22,{align:'center'});txt('ISSUED DATE: 10-01-07',PW-M,PH-22,{align:'right'});
 
-  const fname=('PressureTest_'+(d.projectName||'Form')+'_'+(d.startDate||'')).replace(/[^a-z0-9_\-]/gi,'_')+'.pdf';
-  doc.save(fname);
-  toast('PDF generated');
+  return doc; // caller (buildPDF) decides whether to save / share
 }
 </script>
 </body>
